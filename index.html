@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Automated Paper Trading Dashboard (Bybit Live)</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --green: #10b981;
+            --red: #ef4444;
+            --grey: #64748b;
+            --border: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 10px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--card-bg);
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            gap: 10px;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; letter-spacing: 0.5px; }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 12px;
+            flex-grow: 1;
+        }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            min-height: 500px;
+        }
+
+        .chart-container {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            min-height: 250px;
+            height: 100%;
+        }
+
+        .chart-label {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            z-index: 10;
+            border: 1px solid var(--border);
+            pointer-events: none;
+        }
+
+        /* Sidebar & Engine */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .card h2 { margin-top: 0; margin-bottom: 12px; font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* LED Bars */
+        .led-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .led-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .led-bar {
+            width: 45px;
+            height: 14px;
+            border-radius: 4px;
+            background-color: var(--grey);
+            transition: all 0.3s ease;
+        }
+
+        .led-bar.green { background-color: var(--green); box-shadow: 0 0 10px var(--green); }
+        .led-bar.red { background-color: var(--red); box-shadow: 0 0 10px var(--red); }
+        .led-bar.grey { background-color: var(--grey); }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .stat-box {
+            background: rgba(15, 23, 42, 0.4);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-box span { display: block; font-size: 0.7rem; color: var(--text-muted); }
+        .stat-box strong { font-size: 1rem; }
+
+        /* Active Position Box */
+        #position-card {
+            background: rgba(16, 185, 129, 0.1);
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        /* Audit Log */
+        .log-container {
+            font-family: monospace;
+            font-size: 0.7rem;
+            height: 150px;
+            overflow-y: auto;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        .log-entry { margin-bottom: 4px; line-height: 1.3; }
+        .log-success { color: var(--green); }
+        .log-fail { color: var(--red); }
+        .log-info { color: #3b82f6; }
+
+        /* Responsive Breakpoint for Mobile Screens */
+        @media (max-width: 900px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+            .charts-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto;
+                min-height: auto;
+            }
+            .chart-container {
+                height: 300px; 
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Automated Local Paper Bot</h1>
+        <div style="display: flex; gap: 15px; font-size: 0.85rem; align-items: center;">
+            <div>Feed: <span style="color: #f59e0b; font-weight: bold;">Bybit Live</span></div>
+            <div>BTC: <span id="top-price-display" style="font-weight: bold; color: var(--green);">Loading...</span></div>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+        <div class="charts-grid">
+            <div class="chart-container"><div class="chart-label">5 MINUTE</div><div id="tv_chart_5m" style="height: 100%;"></div></div>
+            <div class="chart-container"><div class="chart-label">15 MINUTE</div><div id="tv_chart_15m" style="height: 100%;"></div></div>
+            <div class="chart-container"><div class="chart-label">30 MINUTE</div><div id="tv_chart_30m" style="height: 100%;"></div></div>
+            <div class="chart-container"><div class="chart-label">1 HOUR</div><div id="tv_chart_1h" style="height: 100%;"></div></div>
+        </div>
+
+        <div class="sidebar">
+            <div class="card">
+                <h2>5M Technical Matrix</h2>
+                <div class="led-container">
+                    <div class="led-row"><span>Chandelier Exit (4, 2)</span><div id="led-chandelier" class="led-bar grey"></div></div>
+                    <div class="led-row"><span>ZLSMA (38)</span><div id="led-zlsma" class="led-bar grey"></div></div>
+                    <div class="led-row"><span>MACD (5, 35, 5)</span><div id="led-macd" class="led-bar grey"></div></div>
+                </div>
+            </div>
+
+            <div class="card" style="display: flex; flex-direction: column; flex-grow: 1;">
+                <h2>Paper Account (10x)</h2>
+                <div class="stats-grid">
+                    <div class="stat-box"><span>Balance</span><strong id="balance-display">$1000.00</strong></div>
+                    <div class="stat-box"><span>Size / Leverage</span><strong>100% / 10x</strong></div>
+                </div>
+
+                <div id="position-card">
+                    <div style="font-size: 0.75rem; display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span>Position: <strong id="pos-type">NONE</strong></span>
+                        <span>Entry: <strong id="pos-entry">$0</strong></span>
+                    </div>
+                    <div style="font-size: 0.8rem; font-weight: bold; text-align: center; margin-top: 5px;">
+                        PnL: <span id="pos-pnl">$0.00 (0.00%)</span>
+                    </div>
+                </div>
+
+                <div style="font-size: 0.7rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 12px;">
+                    • <strong>Trigger:</strong> 5M Chandelier Signal flips.<br>
+                    • <strong>TP / SL Limits:</strong> +10% (+$100) / -7.5% (-$75)
+                </div>
+
+                <h3 style="font-size:0.75rem; color:var(--text-muted); margin: 0 0 5px 0;">Live Engine Logs</h3>
+                <div class="log-container" id="log-box">
+                    <div class="log-entry">[System] Engine initialization completed. Monitoring feeds...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script>
+        function createWidget(containerId, timeframe) {
+            if (typeof TradingView === 'undefined') {
+                document.getElementById(containerId).innerHTML = "<div style='padding:20px;color:red;font-size:0.8rem;'>TradingView script blocked by mobile local security. Run via web server URL (https://) to display.</div>";
+                return;
+            }
+            new TradingView.widget({
+                "autosize": true,
+                "symbol": "BYBIT:BTCUSDT.P",
+                "interval": timeframe,
+                "timezone": "Etc/UTC",
+                "theme": "dark",
+                "style": "1",
+                "locale": "en",
+                "enable_publishing": false,
+                "hide_side_toolbar": true,
+                "allow_symbol_change": false,
+                "container_id": containerId,
+                // Injects Chandelier Exit and Moving Average directly into the charts natively
+                "studies": [
+                    "ChandelierExit@tv-basicstudies",
+                    "MA@tv-basicstudies"
+                ]
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                createWidget("tv_chart_5m", "5");
+                createWidget("tv_chart_15m", "15");
+                createWidget("tv_chart_30m", "30");
+                createWidget("tv_chart_1h", "60");
+            }, 500);
+            
+            initPriceStream();
+            setInterval(fetchTechnicalIndicatorsAndTrade, 15000); 
+            fetchTechnicalIndicatorsAndTrade(); 
+        });
+
+        let accountBalance = 1000.00;
+        const leverage = 10;
+        const tpTargetDollar = 100.00; 
+        const slTargetDollar = 75.00;   
+        
+        let activePosition = null; 
+        let currentMarketPrice = 0;
+        let lastChandelierSignal = null; 
+
+        function logMessage(text, type = '') {
+            const logBox = document.getElementById('log-box');
+            if(!logBox) return;
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        async function initPriceStream() {
+            const updatePrice = async () => {
+                try {
+                    const response = await fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT');
+                    const json = await response.json();
+                    if (json.result && json.result.list && json.result.list[0]) {
+                        currentMarketPrice = parseFloat(json.result.list[0].lastPrice);
+                        document.getElementById('top-price-display').innerText = `$${currentMarketPrice.toFixed(2)}`;
+                        manageActivePositionPnL();
+                    }
+                } catch(e) { console.error("Price feed error", e); }
+            };
+            setInterval(updatePrice, 2000); 
+            updatePrice();
+        }
+
+        async function fetchTechnicalIndicatorsAndTrade() {
+            try {
+                const res = await fetch('https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=5&limit=100');
+                const json = await res.json();
+                if (!json.result || !json.result.list || json.result.list.length === 0) return;
+
+                const list = [...json.result.list].reverse();
+                const closes = list.map(c => parseFloat(c[4]));
+                const highs = list.map(c => parseFloat(c[2]));
+                const lows = list.map(c => parseFloat(c[3]));
+                
+                const len = closes.length;
+                if (len < 40) return;
+
+                const currentClose = closes[len - 1];
+
+                // MACD
+                const macdResult = calculateMACD(closes, 5, 35, 5);
+                const currentMacdLine = macdResult.macd[macdResult.macd.length - 1];
+                const currentSignalLine = macdResult.signal[macdResult.signal.length - 1];
+                const macdSignal = currentMacdLine > currentSignalLine ? 'BUY' : 'SELL';
+                updateLed('led-macd', macdSignal === 'BUY' ? 'green' : 'red');
+
+                // ZLSMA
+                const zlsmaValue = calculateZLSMA(closes, 38);
+                const zlsmaSignal = currentClose > zlsmaValue ? 'BUY' : 'SELL';
+                updateLed('led-zlsma', zlsmaSignal === 'BUY' ? 'green' : 'red');
+
+                // Chandelier
+                const chandSignal = calculateChandelierSignal(highs, lows, closes, 4, 2);
+                updateLed('led-chandelier', chandSignal === 'BUY' ? 'green' : 'red');
+
+                // Trade Triggers
+                if (lastChandelierSignal !== null && lastChandelierSignal !== chandSignal) {
+                    if (!activePosition) {
+                        if (chandSignal === 'BUY') triggerOrder('LONG');
+                        if (chandSignal === 'SELL') triggerOrder('SHORT');
+                    }
+                }
+                lastChandelierSignal = chandSignal;
+
+            } catch (e) { console.error("Indicator processing failed", e); }
+        }
+
+        function manageActivePositionPnL() {
+            if (!activePosition) {
+                document.getElementById('position-card').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('position-card').style.display = 'block';
+            
+            const entryPrice = activePosition.entryPrice;
+            let priceReturn = (currentMarketPrice - entryPrice) / entryPrice;
+            if (activePosition.type === 'SHORT') priceReturn = -priceReturn;
+
+            const leveragedReturn = priceReturn * leverage;
+            const currentPnLDollars = activePosition.balanceAtEntry * leveragedReturn;
+
+            const pnlElement = document.getElementById('pos-pnl');
+            const sign = currentPnLDollars >= 0 ? '+' : '';
+            pnlElement.innerText = `${sign}$${currentPnLDollars.toFixed(2)} (${(leveragedReturn * 100).toFixed(2)}%)`;
+            pnlElement.style.color = currentPnLDollars >= 0 ? 'var(--green)' : 'var(--red)';
+
+            if (currentPnLDollars >= tpTargetDollar) {
+                accountBalance += currentPnLDollars;
+                logMessage(`[TP] Closed ${activePosition.type} at $${currentMarketPrice}. Gain: +$${currentPnLDollars.toFixed(2)}`, 'log-success');
+                activePosition = null;
+                document.getElementById('balance-display').innerText = `$${accountBalance.toFixed(2)}`;
+            } 
+            else if (currentPnLDollars <= -slTargetDollar) {
+                accountBalance += currentPnLDollars; 
+                logMessage(`[SL] Stopped ${activePosition.type} at $${currentMarketPrice}. Loss: -$${Math.abs(currentPnLDollars).toFixed(2)}`, 'log-fail');
+                activePosition = null;
+                document.getElementById('balance-display').innerText = `$${accountBalance.toFixed(2)}`;
+            }
+        }
+
+        function triggerOrder(side) {
+            if (accountBalance <= 0) return;
+            activePosition = {
+                type: side,
+                entryPrice: currentMarketPrice,
+                balanceAtEntry: accountBalance
+            };
+
+            document.getElementById('pos-type').innerText = side;
+            document.getElementById('pos-type').style.color = side === 'LONG' ? 'var(--green)' : 'var(--red)';
+            document.getElementById('pos-entry').innerText = `$${currentMarketPrice.toFixed(2)}`;
+            
+            logMessage(`[BOT] Entered ${side} at $${currentMarketPrice.toFixed(2)} (10x Leverage)`, 'log-info');
+        }
+
+        function updateLed(id, colorClass) {
+            const led = document.getElementById(id);
+            if(led) led.className = 'led-bar ' + colorClass;
+        }
+
+        function calculateEMA(data, period) {
+            const k = 2 / (period + 1);
+            let ema = [data[0]];
+            for (let i = 1; i < data.length; i++) { ema.push(data[i] * k + ema[i - 1] * (1 - k)); }
+            return ema;
+        }
+
+        function calculateMACD(closes, fast, slow, signalPeriod) {
+            const fastEma = calculateEMA(closes, fast);
+            const slowEma = calculateEMA(closes, slow);
+            let macd = [];
+            for(let i=0; i<closes.length; i++) { macd.push(fastEma[i] - slowEma[i]); }
+            const signal = calculateEMA(macd, signalPeriod);
+            return { macd: macd, signal: signal };
+        }
+
+        function calculateZLSMA(closes, period) {
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            const startIdx = closes.length - period;
+            let n = 0;
+            for(let i = startIdx; i < closes.length; i++) {
+                let y = closes[i]; let x = n;
+                sumX += x; sumY += y; sumXY += x*y; sumXX += x*x;
+                n++;
+            }
+            let slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+            let intercept = (sumY - slope * sumX) / n;
+            return slope * (n - 1) + intercept; 
+        }
+
+        function calculateChandelierSignal(highs, lows, closes, period, multiplier) {
+            let trs = [];
+            for(let i = 1; i < closes.length; i++) {
+                let h = highs[i], l = lows[i], pc = closes[i-1];
+                trs.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+            }
+            let atr = trs.slice(-period).reduce((a,b)=>a+b, 0) / period;
+            const highestHigh = Math.max(...highs.slice(-period));
+            const longStop = highestHigh - atr * multiplier;
+            return (closes[closes.length - 1] > longStop) ? 'BUY' : 'SELL';
+        }
+    </script>
+</body>
+</html>
